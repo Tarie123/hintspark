@@ -1,0 +1,11 @@
+# Replace usernames. The owner is asked to review changes to their area.
+/frontend/                     @tariro-username
+/backend/learning/             @tariro-username
+/backend/exercises.py          @tariro-username
+/backend/routes/learning.py    @tariro-username
+/backend/trace/tracer.py       @ekuka-username
+/backend/routes/trace.py       @ekuka-username
+/backend/trace/sandbox.py      @mahammed-username
+/Dockerfile                    @mahammed-username
+/backend/analytics/            @rofiah-username
+/backend/routes/analytics.py   @rofiah-username

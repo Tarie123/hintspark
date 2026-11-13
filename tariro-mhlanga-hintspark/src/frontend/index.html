@@ -1,0 +1,69 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>HintSpark</title>
+<style>
+:root{color-scheme:light dark;--b:#8884;--hl:#fde68a66;--ok:#16a34a;--bad:#dc2626}
+body{font:15px system-ui;margin:0;padding:16px;max-width:1100px;margin-inline:auto}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}@media(max-width:800px){.grid{grid-template-columns:1fr}}
+.card{border:1px solid var(--b);border-radius:10px;padding:12px}
+h3{margin:0 0 8px;font-size:13px;text-transform:uppercase;letter-spacing:.05em;opacity:.7}
+textarea,pre{font:13px ui-monospace,monospace;width:100%;box-sizing:border-box;margin:0}textarea{height:230px}
+.ln{display:block;white-space:pre;padding:0 6px}.ln.on{background:var(--hl);font-weight:600}.ln.cause{outline:2px dashed var(--bad)}
+table{border-collapse:collapse;width:100%;font:13px ui-monospace,monospace}td{border-bottom:1px solid var(--b);padding:3px 6px}
+tr.ch td{background:#3b82f622;font-weight:600}tr.key td{background:#dc262622}
+button,select{font:inherit;padding:6px 12px;margin:2px;border-radius:6px;border:1px solid var(--b);cursor:pointer}button:disabled{opacity:.4;cursor:default}
+.ok{color:var(--ok)}.bad{color:var(--bad)}.row{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.banner{border-left:5px solid var(--bad);padding:8px 12px;margin:10px 0;background:#dc262614;border-radius:6px}.banner.win{border-color:var(--ok);background:#16a34a14}
+.hint{border-left:4px solid #3b82f6;padding:4px 10px;margin:6px 0;white-space:pre-wrap}
+</style></head><body>
+<h2>HintSpark <small style="opacity:.6;font-weight:400">see what your program really did</small></h2>
+<div class="row"><select id="sel" onchange="pick()"></select><button onclick="run()">▶ Run &amp; trace</button><span id="desc"></span></div>
+<div id="banner"></div>
+<div class="grid">
+ <div class="card"><h3>Your code (change it, then run again)</h3><textarea id="code" spellcheck="false"></textarea>
+  <h3 style="margin-top:10px">Your attempts</h3><div id="tries">None yet.</div></div>
+ <div class="card"><h3>Replay</h3>
+  <div class="row"><button onclick="go(-1)">◀ Prev</button><button onclick="go(1)">Next ▶</button><button id="jb" onclick="jump()" disabled>⚑ Jump to the problem</button>
+  <input type="range" id="sl" min="0" value="0" oninput="i=+this.value;render()" style="flex:1"><span id="pos"></span></div>
+  <div id="view" style="margin:8px 0;max-height:190px;overflow:auto"></div>
+  <p id="note" style="margin:0"></p>
+  <h3 style="margin-top:10px">Variables <small>(before this line runs)</small></h3><div id="vars">Run the code to begin.</div></div>
+ <div class="card"><h3>Expected vs actual</h3><div id="cmp">—</div></div>
+ <div class="card"><h3>Stuck? Ask for a hint</h3>
+  <div class="row"><button id="h1" onclick="hint(1)">Hint 1: where to look</button><button id="h2" onclick="hint(2)" disabled>Hint 2: closer</button><button id="h3" onclick="hint(3)" disabled>Hint 3: AI explains</button></div>
+  <div id="hints"></div></div>
+</div>
+<script>
+const sid=Math.random().toString(36).slice(2);let ex=[],cur,tr,i=0,tries=[],level=0;const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+const post=(u,b)=>fetch(u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});
+const ev=(type,x={})=>post('/api/event',{sid,exercise_id:cur&&cur.id,type,...x}).catch(()=>{});
+async function init(){ex=await(await fetch('/api/exercises')).json();$('sel').innerHTML=ex.map(e=>`<option value="${e.id}">${e.title}</option>`).join('');pick()}
+function pick(){cur=ex.find(e=>e.id==$('sel').value);$('desc').textContent=cur.description;$('code').value=cur.code;
+ tr=null;i=0;tries=[];level=0;$('hints').innerHTML='';$('banner').innerHTML='';$('jb').disabled=true;hbtn();render()}
+function hbtn(){[1,2,3].forEach(l=>$('h'+l).disabled=l>level+1)}
+async function run(){tr=await(await post('/api/trace',{exercise_id:cur.id,code:$('code').value})).json();
+ tries.push({ok:tr.passed,out:tr.output.trim()||'(nothing)',n:tr.steps.length});
+ i=tr.key?tr.key.n-1:0;$('sl').max=Math.max(tr.steps.length-1,0);$('jb').disabled=!tr.key;
+ ev('run',{attempt:tries.length,passed:tr.passed});if(tr.passed)ev('pass',{attempt:tries.length,hints:level});render()}
+function go(d){if(tr){i=Math.min(Math.max(i+d,0),tr.steps.length-1);ev('step_nav');render()}}
+function jump(){i=tr.key.n-1;ev('jump');render()}
+async function hint(l){if(!tr){await run()}ev('hint',{level:l});level=Math.max(level,l);hbtn();
+ const box=document.createElement('div');box.className='hint';box.textContent='Thinking…';$('hints').prepend(box);
+ const d=await(await post(l<3?'/api/hint':'/api/explain',{exercise_id:cur.id,code:$('code').value,level:l})).json();
+ box.textContent=(l<3?d.hint:d.explanation)}
+function render(){
+ const lines=$('code').value.split('\n'),s=tr&&tr.steps[i],k=tr&&tr.key;
+ $('view').innerHTML=lines.map((l,n)=>`<span class="ln ${s&&s.line==n+1?'on':''} ${k&&s&&s.n==k.n&&k.cause_line==n+1?'cause':''}">${String(n+1).padStart(2)}  ${esc(l)}</span>`).join('');
+ $('tries').innerHTML=tries.length?tries.map((t,n)=>`<div>${t.ok?'<span class=ok>✔</span>':'<span class=bad>✘</span>'} Attempt ${n+1}: printed <code>${esc(t.out)}</code> · ${t.n} steps</div>`).join(''):'None yet.';
+ if(!tr)return;
+ $('banner').innerHTML=tr.passed?`<div class="banner win"><b>You fixed it!</b> It took ${tries.length} run${tries.length>1?'s':''} and ${level} hint${level==1?'':'s'}. Try the next exercise.</div>`
+  :`<div class="banner"><b>Your program printed <code>${esc(tr.output.trim()||'nothing')}</code> but expected <code>${esc(tr.expected)}</code>.</b>`+
+   (k?` The wrong value <code>${esc(k.var)} = ${esc(k.val)}</code> first appears at step ${k.n}${k.stuck?` and stays that way for ${k.stuck} more step${k.stuck>1?'s':''}`:''}. Press <b>⚑ Jump to the problem</b>.`:` Step through to see why.`)+`</div>`;
+ $('sl').value=i;$('pos').textContent=s?`step ${s.n}/${tr.steps.length}`:'no steps';
+ $('note').innerHTML=s?`<b>What happened:</b> ${esc(s.note)}.`:'';
+ $('vars').innerHTML=s?'<table>'+Object.entries(s.vars).map(([n,v])=>`<tr class="${s.changed.includes(n)?'ch':''} ${k&&k.var==n&&s.n>=k.n?'key':''}"><td>${esc(n)}</td><td>${esc(v)}</td></tr>`).join('')+'</table>':'';
+ const act=(tr.output||'').trim().split('\n'),exp=tr.expected.trim().split('\n');
+ $('cmp').innerHTML=`<div class="row"><div style="flex:1"><b>Expected</b><pre>${esc(tr.expected)}</pre></div><div style="flex:1"><b>Actual</b><pre>${act.map((l,n)=>`<span class="${l==exp[n]?'ok':'bad'}">${esc(l)}</span>`).join('\n')}</pre></div></div>
+ <p class="${tr.passed?'ok':'bad'}">${tr.passed?'✔ Output matches':'✘ Output differs'}</p>${tr.error?`<p class="bad">${esc(tr.error)}</p>`:''}`}
+init();
+</script></body></html>

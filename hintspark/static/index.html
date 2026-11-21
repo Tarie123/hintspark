@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="data:,">
+  <title>HintSpark - see what your code really did</title>
+  <link rel="stylesheet" href="/vendor/codemirror/codemirror.css">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header>
+    <h1>⚡ HintSpark</h1>
+    <p>Replay what your program did. Find where it went wrong. Fix it yourself.</p>
+  </header>
+
+  <main>
+    <section id="left" class="panel">
+      <nav id="exercise-tabs" aria-label="Exercises"></nav>
+      <p id="goal" class="goal"></p>
+      <textarea id="editor" aria-label="Your code"></textarea>
+      <div class="row">
+        <button id="run" class="primary">▶ Run &amp; trace</button>
+        <button id="reset" class="secondary">Reset code</button>
+      </div>
+      <div id="tests"></div>
+    </section>
+
+    <section id="right" class="panel">
+      <div id="status" class="status">Pick an exercise and press <b>Run &amp; trace</b>.</div>
+
+      <div class="controls" aria-label="Step controls">
+        <button id="first" title="First step">⏮</button>
+        <button id="prev" title="Previous step (←)">◀</button>
+        <input id="slider" type="range" min="0" max="0" value="0" aria-label="Step">
+        <button id="next" title="Next step (→)">▶</button>
+        <button id="last" title="Last step">⏭</button>
+      </div>
+      <div class="row">
+        <div id="step-label" class="step-label">No trace yet.</div>
+        <button id="jump" class="warn" hidden>🎯 Jump to where it went wrong</button>
+      </div>
+
+      <h3>Variables at this step</h3>
+      <div id="vars" class="vars"></div>
+
+      <h3>Output so far</h3>
+      <pre id="output-so-far" class="output"></pre>
+
+      <h3>Expected vs actual</h3>
+      <div id="compare"></div>
+
+      <div class="row">
+        <button id="explain" class="primary" disabled>💡 Explain this step</button>
+      </div>
+      <div id="explanation" class="explanation" aria-live="polite"></div>
+    </section>
+  </main>
+
+  <script src="/vendor/codemirror/codemirror.js"></script>
+  <script src="/vendor/codemirror/python.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>

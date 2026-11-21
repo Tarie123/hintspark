@@ -1,0 +1,13 @@
+[
+  {"name": "ts", "type": "TIMESTAMP", "mode": "REQUIRED"},
+  {"name": "session_id", "type": "STRING"},
+  {"name": "exercise_id", "type": "STRING"},
+  {"name": "event_type", "type": "STRING"},
+  {"name": "passed", "type": "BOOLEAN"},
+  {"name": "step", "type": "INTEGER"},
+  {"name": "hint_level", "type": "INTEGER"},
+  {"name": "source", "type": "STRING"},
+  {"name": "code_hash", "type": "STRING"},
+  {"name": "code_len", "type": "INTEGER"},
+  {"name": "detail", "type": "STRING"}
+]

@@ -6,6 +6,7 @@ from collections import defaultdict, deque
 from pathlib import Path
 from typing import Optional
 
+from dotenv import load_dotenv
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -15,6 +16,8 @@ from .exercises import BY_ID, EXERCISES, public_view
 from .explain import explain
 from .grader import grade
 from .sandbox import run_code
+
+load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 MAX_CODE_CHARS = 2000
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
@@ -119,6 +122,15 @@ async def run(req: RunRequest, request: Request, bg: BackgroundTasks):
         "session_id": req.session_id, "exercise_id": ex["id"], "event_type": "run",
         "passed": graded["all_passed"], "step": div["step"] if div else None,
         "detail": div["kind"] if div else None, **code_fingerprint(req.code),
+    })
+    bg.add_task(log_event, {
+        "session_id": req.session_id,
+        "exercise_id": ex["id"],
+        "event_type": "exercise_passed" if graded["all_passed"] else "exercise_failed",
+        "passed": graded["all_passed"],
+        "step": div["step"] if div else None,
+        "detail": div["kind"] if div else None,
+        **code_fingerprint(req.code),
     })
     return graded
 

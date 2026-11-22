@@ -59,6 +59,7 @@ pytest -q                            # 19 tests: exercises, sandbox, guardrails
 gcloud auth login
 export PROJECT_ID=your-project-id
 export NVIDIA_API_KEY=nvapi-...      # get one at build.nvidia.com
+export DATABASE_URL='postgresql://...' # Supabase pooler connection string
 ./deploy.sh                          # REGION defaults to us-central1
 ```
 

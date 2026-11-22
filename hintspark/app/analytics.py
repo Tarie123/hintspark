@@ -13,9 +13,38 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 load_dotenv(PROJECT_ROOT / ".env")
 
 DATABASE_URL = os.getenv("DATABASE_URL")
+_pool = None
+_pool_url = None
 
 
-def log_event(event: dict) -> None:
+def _connection_pool(database_url: str):
+    """Get a small process-local pool; recreate it if configuration changes."""
+    global _pool, _pool_url
+
+    if _pool is not None and _pool_url == database_url:
+        return _pool
+
+    if _pool is not None:
+        try:
+            _pool.close()
+        except Exception:
+            pass
+
+    from psycopg_pool import ConnectionPool
+
+    _pool = ConnectionPool(
+        conninfo=database_url,
+        min_size=0,
+        max_size=4,
+        timeout=3,
+        open=True,
+        kwargs={"connect_timeout": 3},
+    )
+    _pool_url = database_url
+    return _pool
+
+
+def log_event(event: dict) -> bool:
     row = {
         "ts": datetime.now(timezone.utc),
         "session_id": str(event.get("session_id", "anon"))[:64],
@@ -36,7 +65,7 @@ def log_event(event: dict) -> None:
 
     if not database_url:
         print(json.dumps({"severity": "WARNING", "message": "DATABASE_URL is not configured; event logged locally only"}), flush=True)
-        return
+        return False
 
     try:
         import psycopg
@@ -47,7 +76,9 @@ def log_event(event: dict) -> None:
             row["code_hash"], row["code_len"], row["detail"],
         )
 
-        with psycopg.connect(database_url, connect_timeout=5) as conn:
+        pool = _connection_pool(database_url)
+
+        with pool.connection(timeout=3) as conn:
             with conn.cursor() as cur:
                 cur.execute(
                     """
@@ -59,10 +90,13 @@ def log_event(event: dict) -> None:
                     """,
                     values,
                 )
+        return True
     except ImportError:
         print(json.dumps({"severity": "WARNING", "message": "PostgreSQL driver is not installed; event logged locally only"}), flush=True)
     except Exception as exc:
         print(json.dumps({"severity": "WARNING", "message": f"Supabase unavailable; event logged locally only: {type(exc).__name__}"}), flush=True)
+
+    return False
 
 
 def record_event(
@@ -70,10 +104,10 @@ def record_event(
     session_id: str = "anon",
     exercise_id: str | None = None,
     payload: dict | None = None,
-) -> None:
+) -> bool:
     """Record a learner event using the application's existing event schema."""
     payload = payload or {}
-    log_event({
+    return log_event({
         "session_id": session_id,
         "exercise_id": exercise_id,
         "event_type": event_type,

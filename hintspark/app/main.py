@@ -123,6 +123,15 @@ async def run(req: RunRequest, request: Request, bg: BackgroundTasks):
         "passed": graded["all_passed"], "step": div["step"] if div else None,
         "detail": div["kind"] if div else None, **code_fingerprint(req.code),
     })
+    bg.add_task(log_event, {
+        "session_id": req.session_id,
+        "exercise_id": ex["id"],
+        "event_type": "exercise_passed" if graded["all_passed"] else "exercise_failed",
+        "passed": graded["all_passed"],
+        "step": div["step"] if div else None,
+        "detail": div["kind"] if div else None,
+        **code_fingerprint(req.code),
+    })
     return graded
 
 

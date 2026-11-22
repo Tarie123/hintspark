@@ -8,7 +8,6 @@ set -euo pipefail
 
 PROJECT_ID="${PROJECT_ID:?Set PROJECT_ID}"
 REGION="${REGION:-us-central1}"
-BQ_LOCATION="${BQ_LOCATION:-US}"
 SERVICE="hintspark"
 SA_NAME="hintspark-run"
 SA="${SA_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
@@ -17,7 +16,7 @@ gcloud config set project "$PROJECT_ID"
 
 echo "==> Enabling APIs"
 gcloud services enable run.googleapis.com cloudbuild.googleapis.com \
-  artifactregistry.googleapis.com secretmanager.googleapis.com bigquery.googleapis.com
+  artifactregistry.googleapis.com secretmanager.googleapis.com
 
 echo "==> Least-privilege service account"
 gcloud iam service-accounts describe "$SA" >/dev/null 2>&1 || \
@@ -38,14 +37,20 @@ else
   SECRET_FLAG=()
 fi
 
-echo "==> BigQuery dataset + events table"
-bq --location="$BQ_LOCATION" mk -d --if_not_exists "${PROJECT_ID}:hintspark" || true
-bq show "${PROJECT_ID}:hintspark.events" >/dev/null 2>&1 || \
-  bq mk --table --time_partitioning_field ts "${PROJECT_ID}:hintspark.events" analytics/schema.json
-gcloud projects add-iam-policy-binding "$PROJECT_ID" \
-  --member "serviceAccount:${SA}" --role roles/bigquery.dataEditor --condition=None >/dev/null
-gcloud projects add-iam-policy-binding "$PROJECT_ID" \
-  --member "serviceAccount:${SA}" --role roles/bigquery.jobUser --condition=None >/dev/null
+echo "==> Supabase database URL -> Secret Manager"
+if [[ -n "${DATABASE_URL:-}" ]]; then
+  if gcloud secrets describe supabase-database-url >/dev/null 2>&1; then
+    printf "%s" "$DATABASE_URL" | gcloud secrets versions add supabase-database-url --data-file=-
+  else
+    printf "%s" "$DATABASE_URL" | gcloud secrets create supabase-database-url --replication-policy=automatic --data-file=-
+  fi
+  gcloud secrets add-iam-policy-binding supabase-database-url \
+    --member "serviceAccount:${SA}" --role roles/secretmanager.secretAccessor >/dev/null
+  DATABASE_SECRET_FLAG=(--set-secrets "DATABASE_URL=supabase-database-url:latest")
+else
+  echo "    DATABASE_URL not set - analytics will use local logging only."
+  DATABASE_SECRET_FLAG=()
+fi
 
 echo "==> Build and deploy to Cloud Run (gen1 = gVisor sandbox)"
 gcloud run deploy "$SERVICE" \
@@ -54,7 +59,8 @@ gcloud run deploy "$SERVICE" \
   --service-account "$SA" \
   --execution-environment gen1 \
   --memory 1Gi --cpu 1 --concurrency 10 --max-instances 5 --timeout 60 \
-  --set-env-vars "BQ_TABLE=${PROJECT_ID}.hintspark.events" \
+  --set-env-vars "PORT=${PORT:-8080}" \
+  "${DATABASE_SECRET_FLAG[@]}" \
   "${SECRET_FLAG[@]}" \
   --allow-unauthenticated
 

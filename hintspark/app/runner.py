@@ -16,9 +16,11 @@ Defence layers in this file (the container / gVisor sandbox is the outer layer):
 import builtins
 import io
 import json
-import resource
 import sys
 import types
+
+if sys.platform != "win32":
+    import resource
 
 # Modules the learner is allowed to import. Import them now, before the
 # sandbox closes, so the learner never triggers file access to load them.
@@ -68,9 +70,10 @@ def main():
     stdin_lines = iter(payload.get("stdin", "").splitlines())
 
     # ---- resource limits ---------------------------------------------------
-    resource.setrlimit(resource.RLIMIT_CPU, (2, 2))
-    resource.setrlimit(resource.RLIMIT_AS, (512 * 1024 * 1024, 512 * 1024 * 1024))
-    resource.setrlimit(resource.RLIMIT_FSIZE, (1024 * 1024, 1024 * 1024))
+    if sys.platform != "win32":
+        resource.setrlimit(resource.RLIMIT_CPU, (2, 2))
+        resource.setrlimit(resource.RLIMIT_AS, (512 * 1024 * 1024, 512 * 1024 * 1024))
+        resource.setrlimit(resource.RLIMIT_FSIZE, (1024 * 1024, 1024 * 1024))
 
     real_stdout = sys.stdout
     out = io.StringIO()

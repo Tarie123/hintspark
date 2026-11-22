@@ -6,6 +6,7 @@ from collections import defaultdict, deque
 from pathlib import Path
 from typing import Optional
 
+from dotenv import load_dotenv
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -15,6 +16,8 @@ from .exercises import BY_ID, EXERCISES, public_view
 from .explain import explain
 from .grader import grade
 from .sandbox import run_code
+
+load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 MAX_CODE_CHARS = 2000
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"

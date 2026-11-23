@@ -1,3 +1,4 @@
+rootDir: hintspark
 services:
   - type: web
     name: hintspark

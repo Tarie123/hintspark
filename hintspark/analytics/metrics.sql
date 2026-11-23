@@ -76,7 +76,7 @@ WITH attempts AS (
     exercise_id,
     session_id,
     MAX(IF(event_type = 'run' AND passed, 1, 0)) AS completed
-  FROM hintspark.events
+  FROM `PROJECT.hintspark.events`
   GROUP BY exercise_id, session_id
 )
 SELECT

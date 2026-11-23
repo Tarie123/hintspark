@@ -69,3 +69,21 @@ SELECT source, COUNT(*) AS explanations
 FROM `PROJECT.hintspark.events`
 WHERE event_type = 'explain'
 GROUP BY source;
+
+-- 6. Exercise abandonment rate (started or ran, never passed)
+WITH attempts AS (
+  SELECT
+    exercise_id,
+    session_id,
+    MAX(IF(event_type = 'run' AND passed, 1, 0)) AS completed
+  FROM `PROJECT.hintspark.events`
+  GROUP BY exercise_id, session_id
+)
+SELECT
+  exercise_id,
+  COUNT(*) AS total_sessions,
+  COUNTIF(completed = 0) AS abandoned_sessions,
+  ROUND(100.0 * COUNTIF(completed = 0) / COUNT(*), 1) AS abandonment_rate_pct
+FROM attempts
+GROUP BY exercise_id
+ORDER BY abandonment_rate_pct DESC;

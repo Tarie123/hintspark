@@ -102,17 +102,25 @@ def main():
     safe_builtins["__import__"] = guarded_import
 
     # ---- audit hook (cannot be removed once installed) ---------------------
-    sandbox = {"active": False}
-    blocked_prefixes = (
-        "open", "socket.", "subprocess.", "os.system", "os.exec", "os.spawn",
-        "os.posix_spawn", "os.fork", "os.kill", "os.remove", "os.rename",
-        "os.rmdir", "os.mkdir", "os.chmod", "os.putenv", "os.unsetenv", "ctypes.",
-        "shutil.", "urllib.", "http.", "ftplib.", "smtplib.", "webbrowser.",
-        "code.__new__", "marshal.", "pickle.",
-    )
-
+    # SECURITY: the hook must not depend on ANY state learner code can modify.
+    # Learner code can reach this function's locals and this module's globals
+    # (traceback -> frame -> f_back), and on Python 3.13+ can even WRITE to
+    # closure variables through frame.f_locals. So:
+    #   * no on/off flag - once installed, the hook stays armed until this
+    #     short-lived process exits;
+    #   * no closure variables - the block list is a literal constant compiled
+    #     into the hook's own code object;
+    #   * "object.__setattr__" is blocked, so the hook's __code__ cannot be
+    #     swapped for one that allows everything.
+    # See tests/test_sandbox_escape.py.
     def audit(event, args):
-        if sandbox["active"] and event.startswith(blocked_prefixes):
+        if event.startswith((
+            "open", "socket.", "subprocess.", "os.system", "os.exec", "os.spawn",
+            "os.posix_spawn", "os.fork", "os.kill", "os.remove", "os.rename",
+            "os.rmdir", "os.mkdir", "os.chmod", "os.putenv", "os.unsetenv", "ctypes.",
+            "shutil.", "urllib.", "http.", "ftplib.", "smtplib.", "webbrowser.",
+            "code.__new__", "marshal.", "pickle.", "object.__setattr__",
+        )):
             raise PermissionError(f"'{event}' is not allowed in HintSpark exercises")
 
     # ---- tracer ------------------------------------------------------------
@@ -157,10 +165,9 @@ def main():
     g = {"__name__": "__main__", "__builtins__": safe_builtins}
 
     # ---- run ---------------------------------------------------------------
-    sys.addaudithook(audit)
     sys.stdout = out
     sys.settrace(tracer)
-    sandbox["active"] = True  # from here on, the learner cannot touch files/network/processes
+    sys.addaudithook(audit)  # from here on, nothing in this process can touch files/network/processes
     try:
         exec(compiled, g)
     except StepLimit:
@@ -179,7 +186,6 @@ def main():
             tb = tb.tb_next
         error = {"type": type(e).__name__, "message": str(e), "line": line}
     finally:
-        sandbox["active"] = False
         sys.settrace(None)
         sys.stdout = real_stdout
 

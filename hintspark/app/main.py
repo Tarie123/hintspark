@@ -1,8 +1,9 @@
 """HintSpark API + static front end (single Cloud Run service)."""
 import asyncio
 import hashlib
+import os
 import time
-from collections import defaultdict, deque
+from collections import OrderedDict, deque
 from pathlib import Path
 from typing import Optional
 
@@ -42,26 +43,55 @@ async def security_headers(request: Request, call_next):
 
 
 class RateLimiter:
-    """Per-instance sliding window. Put Cloud Armor in front for real abuse control."""
+    """Per-instance sliding window. Put an edge WAF / rate limiter in front for real abuse control.
 
-    def __init__(self, limit: int, window_s: int):
-        self.limit, self.window, self.hits = limit, window_s, defaultdict(deque)
+    Memory is bounded: at most `max_keys` clients are tracked; the least
+    recently seen client is forgotten first (LRU).
+    """
+
+    def __init__(self, limit: int, window_s: int, max_keys: int = 10_000):
+        self.limit, self.window, self.max_keys = limit, window_s, max_keys
+        self.hits: OrderedDict[str, deque] = OrderedDict()
 
     def check(self, key: str):
-        now, q = time.monotonic(), self.hits[key]
+        now = time.monotonic()
+        q = self.hits.pop(key, None) or deque()
         while q and now - q[0] > self.window:
             q.popleft()
+        self.hits[key] = q  # re-insert as most recently seen
+        while len(self.hits) > self.max_keys:
+            self.hits.popitem(last=False)
         if len(q) >= self.limit:
             raise HTTPException(429, "You're going a bit fast - wait a few seconds and try again.")
         q.append(now)
 
 
-run_limit, explain_limit = RateLimiter(30, 60), RateLimiter(10, 60)
+run_limit, explain_limit, event_limit = RateLimiter(30, 60), RateLimiter(10, 60), RateLimiter(60, 60)
+
+
+def _trusted_proxy_hops() -> int:
+    try:
+        return max(0, int(os.getenv("TRUSTED_PROXY_HOPS", "0")))
+    except ValueError:
+        return 0
 
 
 def client_key(req: Request) -> str:
-    xff = req.headers.get("x-forwarded-for")
-    return xff.split(",")[0].strip() if xff else (req.client.host if req.client else "unknown")
+    """Rate-limit identity that the client cannot choose.
+
+    X-Forwarded-For is client-controlled except for the entries that OUR
+    proxies append at the END. With TRUSTED_PROXY_HOPS=0 (default) the header
+    is ignored; set it to the number of proxies in front of the app (e.g. 1 on
+    Render or Cloud Run - verify in the platform docs) to use the address the
+    nearest trusted proxy saw.
+    """
+    peer = req.client.host if req.client else "unknown"
+    hops = _trusted_proxy_hops()
+    if hops:
+        parts = [p.strip() for p in req.headers.get("x-forwarded-for", "").split(",") if p.strip()]
+        if len(parts) >= hops:
+            return parts[-hops]
+    return peer
 
 
 # ---------- models ----------------------------------------------------------
@@ -150,7 +180,8 @@ async def explain_route(req: ExplainRequest, request: Request, bg: BackgroundTas
 
 
 @app.post("/api/event")
-async def event(req: EventRequest, bg: BackgroundTasks):
+async def event(req: EventRequest, request: Request, bg: BackgroundTasks):
+    event_limit.check(client_key(request))
     if req.event_type not in EVENT_TYPES or req.exercise_id not in BY_ID:
         raise HTTPException(400, "Unknown event")
     bg.add_task(log_event, req.model_dump())

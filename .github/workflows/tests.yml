@@ -1,0 +1,36 @@
+name: tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Least privilege: this job only needs to read the code.
+permissions:
+  contents: read
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        # 3.12 = Dockerfile image; 3.13 = newer runtimes (write-through f_locals, PEP 667)
+        python-version: ["3.12", "3.13"]
+    defaults:
+      run:
+        working-directory: hintspark
+    steps:
+      # Actions pinned to full commit SHAs (tags can be moved; SHAs cannot).
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install dependencies
+        run: python -m pip install -r requirements-dev.txt
+      - name: Run tests
+        # No secrets are given to this job: tests use fakes for the database and the AI API.
+        run: python -m pytest -q

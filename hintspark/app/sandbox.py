@@ -10,11 +10,24 @@ WALL_TIMEOUT_S = 5
 MAX_OUTPUT_BYTES = 5 * 1024 * 1024
 
 
-def run_code(code: str, stdin: str = "") -> dict:
-    child_env = {"PATH": "/usr/local/bin:/usr/bin:/bin", "LANG": "C.UTF-8"}
+def _child_env() -> dict:
+    """Allow-list (not deny-list) of environment variables for learner code.
+
+    Learner code can read os.environ without raising any audit event, so the
+    only safe option is to never hand it server secrets (DATABASE_URL,
+    NVIDIA_API_KEY, or anything added later). See tests/test_sandbox_escape.py.
+    """
+    env = {"LANG": "C.UTF-8"}
     if sys.platform == "win32":
-        child_env = os.environ.copy()
-        child_env.pop("NVIDIA_API_KEY", None)
+        # Python on Windows needs SYSTEMROOT to start and for os.urandom.
+        env["SYSTEMROOT"] = os.environ.get("SYSTEMROOT", r"C:\Windows")
+    else:
+        env["PATH"] = "/usr/local/bin:/usr/bin:/bin"
+    return env
+
+
+def run_code(code: str, stdin: str = "") -> dict:
+    child_env = _child_env()
 
     try:
         proc = subprocess.run(

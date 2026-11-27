@@ -169,7 +169,9 @@ def main():
     sys.settrace(tracer)
     sys.addaudithook(audit)  # from here on, nothing in this process can touch files/network/processes
     try:
-        exec(compiled, g)
+        # Running learner code is this file's purpose; the risk is handled by the
+        # sandbox layers above (rlimits, restricted builtins, audit hook, separate process).
+        exec(compiled, g)  # nosec B102
     except StepLimit:
         error = {
             "type": "StepLimit",

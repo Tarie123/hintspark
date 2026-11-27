@@ -1,7 +1,8 @@
 """Launches runner.py in a separate, short-lived Python process per run."""
 import json
 import os
-import subprocess
+# subprocess is needed to run learner code in a separate, short-lived process.
+import subprocess  # nosec B404
 import sys
 import tempfile
 
@@ -30,7 +31,8 @@ def run_code(code: str, stdin: str = "") -> dict:
     child_env = _child_env()
 
     try:
-        proc = subprocess.run(
+        # Fixed argument list, no shell; untrusted code goes in via stdin, never the command line.
+        proc = subprocess.run(  # nosec B603
             [sys.executable, "-I", RUNNER],
             input=json.dumps({"code": code, "stdin": stdin}),
             capture_output=True,

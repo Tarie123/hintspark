@@ -1,6 +1,8 @@
 # Exact pins so every build installs the same, reviewed versions.
 # Update deliberately (and re-run tests + pip-audit) rather than by accident.
-fastapi==0.115.14
+fastapi==0.165.0
+# Pinned explicitly: 0.46.x had known advisories (found by pip-audit in CI).
+starlette==1.10.0
 uvicorn[standard]==0.32.1
 httpx==0.27.2
 psycopg[binary,pool]==3.3.9

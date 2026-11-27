@@ -34,3 +34,26 @@ jobs:
       - name: Run tests
         # No secrets are given to this job: tests use fakes for the database and the AI API.
         run: python -m pytest -q
+
+  security-scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: hintspark
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - name: Install scanners
+        run: python -m pip install -r requirements-scan.txt
+      - name: Dependency vulnerabilities (pip-audit)
+        # Fails if any pinned production dependency has a known vulnerability.
+        run: python -m pip_audit -r requirements.txt --progress-spinner off
+      - name: Python security issues (Bandit)
+        # Fails on any new finding. Accepted findings are marked in code with
+        # "# nosec <ID>" plus the reason, so each exception is visible in review.
+        run: python -m bandit -r app

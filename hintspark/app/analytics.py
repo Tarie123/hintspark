@@ -27,8 +27,9 @@ def _connection_pool(database_url: str):
     if _pool is not None:
         try:
             _pool.close()
-        except Exception:
-            pass
+        except Exception as exc:
+            # Log only the error TYPE: the message could contain connection details.
+            print(json.dumps({"severity": "WARNING", "message": f"Closing old DB pool failed: {type(exc).__name__}"}), flush=True)
 
     from psycopg_pool import ConnectionPool
 

@@ -38,7 +38,8 @@ EXERCISES = [
             "Which line sets total back to 0, and how many times does that line run?",
             "A running total should be set to 0 once. Is line 3 running once, or once per score?",
         ],
-        "solution_markers": [],
+        # The fix is "set total to 0 once, before the loop" - block it in words.
+        "solution_markers": ["before the loop", "outside the loop", "above the loop", "out of the loop"],
     },
     {
         "id": "ex3",
